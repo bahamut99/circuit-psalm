@@ -1,150 +1,176 @@
-import React, { useRef, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
+import React, { useMemo, useRef, useEffect } from 'react'
 import * as THREE from 'three'
+import { useFrame } from '@react-three/fiber'
 import { useGameStore } from '../systems/store.js'
 
 /**
- * Player puck with a small pointer "nose".
+ * Player puck with pointer.
  * Props:
- *  - W, H: arena size in world units
- *  - walls: THREE.Box2[] axis-aligned rectangles in world coords (top-left origin: (-W/2,+H/2))
- *  - input: Controls.useInputBindings() return — should expose:
- *      input.move: { x: -1..1, y: -1..1 }   // WASD movement vector
- *      input.fire: boolean                  // arrows or mouse+space
- *      input.aim:  { x: number, y: number } // world-space aim point (mouse), may be null
- *      input.fireDir: { x: -1..1, y: -1..1 } // from arrow keys when not using mouse
+ *  - W, H: arena size (world units)
+ *  - walls: THREE.Box2[] in arena coordinates (center-origin, +Y up)
+ *  - input: { move:{x,y}, fire:boolean, fireDir:{x,y}, aim:{x,y}|null }
+ *  - spawn: { x, y } safe spawn computed by Level
  */
-export default function Player({ W, H, walls, input }) {
+export default function Player({ W, H, walls, input, spawn }) {
+  // store access
+  const { addBullet, powerRapid } = useGameStore((s) => ({
+    addBullet: s.addBullet,
+    powerRapid: s.powerRapid,
+  }))
+
+  // --- tuning ---
+  const radius = 3.2
+  const acc = 160
+  const max = 55
+  const friction = 0.16
+  const baseFireGap = 0.10 // seconds
+  const bulletSpeed = 110
+  const muzzleOffset = radius + 0.9
+
+  // --- refs / state ---
   const mesh = useRef()
   const nose = useRef()
-
-  // store interactions
-  const addBullet    = useGameStore(s => s.addBullet)
-  const powerRapid   = useGameStore(s => s.powerRapid)
-
-  // local kinematics
-  const pos = useMemo(() => new THREE.Vector2(0, 0), [])
   const vel = useMemo(() => new THREE.Vector2(0, 0), [])
-  const aim = useMemo(() => new THREE.Vector2(1, 0), [])
-  const tmp = useMemo(() => new THREE.Vector2(), [])
+  const pos = useMemo(() => new THREE.Vector2(spawn?.x ?? 0, spawn?.y ?? 0), [spawn])
+  const lastAim = useMemo(() => new THREE.Vector2(1, 0), [])
+  const cdRef = useRef(0)
 
-  const radius = 3.5
-  const accel  = 70
-  const maxSpd = 32
-  const friction = 7
+  // apply spawn on mount/level change
+  useEffect(() => {
+    pos.set(spawn?.x ?? 0, spawn?.y ?? 0)
+    vel.set(0, 0)
+    if (mesh.current) mesh.current.position.set(pos.x, pos.y, 0)
+  }, [spawn, pos, vel])
 
-  let cd = 0 // cooldown (closed over in frame)
+  // circle-vs-rect resolve (push out by smallest penetration)
+  function resolveVsBox(p, v, r, box) {
+    // distances to the 4 expanded faces (positive means overlapping past that face)
+    const penLeft   = (p.x + r) - box.min.x
+    const penRight  = box.max.x - (p.x - r)
+    const penBottom = (p.y + r) - box.min.y
+    const penTop    = box.max.y - (p.y - r)
 
-  // simple circle-vs-rect resolve in our screen space:
-  function resolveCircleVsBox(circle, r, box) {
-    // convert to "arena space": center at (0,0), +X right, +Y up
-    const min = new THREE.Vector2(box.min.x - W/2,  H/2 - box.max.y)
-    const max = new THREE.Vector2(box.max.x - W/2,  H/2 - box.min.y)
-    const clx = THREE.MathUtils.clamp(circle.x, min.x, max.x)
-    const cly = THREE.MathUtils.clamp(circle.y, min.y, max.y)
-    tmp.set(circle.x - clx, circle.y - cly)
-    const d2 = tmp.lengthSq()
-    if (d2 > r*r) return false
-    const d = Math.sqrt(d2) || 1
-    tmp.multiplyScalar((r - d) / d)
-    circle.add(tmp)
-    return true
-  }
-
-  function clampToArena(p, r) {
-    p.x = THREE.MathUtils.clamp(p.x, -W/2 + r,  W/2 - r)
-    p.y = THREE.MathUtils.clamp(p.y, -H/2 + r,  H/2 - r)
-  }
-
-  function tryShoot(dt) {
-    cd -= dt
-    if (!input?.fire) return
-    if (cd > 0) return
-
-    // get firing direction: prefer mouse aim; fallback to arrow-dir
-    if (input?.aim) {
-      tmp.set(input.aim.x, input.aim.y).sub(pos).normalize()
-      if (tmp.lengthSq() > 0.0001) aim.copy(tmp)
-    } else if (input?.fireDir && (input.fireDir.x || input.fireDir.y)) {
-      tmp.set(input.fireDir.x, input.fireDir.y).normalize()
-      if (tmp.lengthSq() > 0.0001) aim.copy(tmp)
+    if (penLeft > 0 && penRight > 0 && penBottom > 0 && penTop > 0) {
+      // overlapping: choose the smallest move out
+      const m = Math.min(penLeft, penRight, penBottom, penTop)
+      if (m === penLeft)  { p.x = box.min.x - r; v.x = Math.min(0, v.x) * 0.2 }
+      else if (m === penRight) { p.x = box.max.x + r; v.x = Math.max(0, v.x) * 0.2 }
+      else if (m === penBottom) { p.y = box.min.y - r; v.y = Math.min(0, v.y) * 0.2 }
+      else { p.y = box.max.y + r; v.y = Math.max(0, v.y) * 0.2 }
+      return true
     }
-
-    // spawn bullet
-    const speed = 90
-    const x = pos.x + aim.x * (radius + 0.8)
-    const y = pos.y + aim.y * (radius + 0.8)
-    addBullet({
-      id: crypto.randomUUID(),
-      owner: 'player',
-      x, y,
-      vx: aim.x * speed,
-      vy: aim.y * speed,
-      r: 0.9,
-      life: 2.0,
-      color: '#ffffff'
-    })
-
-    cd = (powerRapid > 0 ? 0.06 : 0.12)
+    return false
   }
 
+  // resolve against all walls (Box2s)
+  function resolveVsWalls(p, v, r, boxes) {
+    for (let i = 0; i < boxes.length; i++) resolveVsBox(p, v, r, boxes[i])
+  }
+
+  // aim helper
+  function currentAim() {
+    // Arrow keys provide a fire vector
+    const fx = input?.fireDir?.x ?? 0
+    const fy = input?.fireDir?.y ?? 0
+    if (fx !== 0 || fy !== 0) {
+      lastAim.set(fx, fy).normalize()
+      return lastAim
+    }
+    // Mouse aim → vector to mouse world point
+    if (input?.aim) {
+      lastAim.set(input.aim.x - pos.x, input.aim.y - pos.y)
+      if (lastAim.lengthSq() > 0.0001) lastAim.normalize()
+      return lastAim
+    }
+    // fallback to previous
+    return lastAim
+  }
+
+  // per-frame
   useFrame((_, dt) => {
     if (dt > 0.05) dt = 0.05
 
-    // acceleration from WASD-like axes
-    const ax = (input?.move?.x ?? 0)
-    const ay = (input?.move?.y ?? 0)
-    if (ax || ay) {
-      tmp.set(ax, ay)
-      // normalize so diagonal speed isn't higher
-      const l = tmp.length() || 1
-      tmp.multiplyScalar(accel * dt / l)
-      vel.add(tmp)
+    // movement
+    const mvx = input?.move?.x ?? 0
+    const mvy = input?.move?.y ?? 0
+    if (mvx !== 0 || mvy !== 0) {
+      const len = Math.hypot(mvx, mvy) || 1
+      vel.x += (mvx / len) * acc * dt
+      vel.y += (mvy / len) * acc * dt
+    }
+
+    // clamp max speed
+    const spd = Math.hypot(vel.x, vel.y)
+    if (spd > max) {
+      vel.x = (vel.x / spd) * max
+      vel.y = (vel.y / spd) * max
     }
 
     // friction
-    const f = Math.max(0, 1 - friction * dt)
-    vel.multiplyScalar(f)
-
-    // clamp speed
-    const sp = vel.length()
-    if (sp > maxSpd) vel.multiplyScalar(maxSpd / sp)
+    vel.x *= (1 - friction * dt)
+    vel.y *= (1 - friction * dt)
 
     // integrate
-    pos.addScaledVector(vel, dt)
+    pos.x += vel.x * dt
+    pos.y += vel.y * dt
 
-    // arena clamp & walls
-    clampToArena(pos, radius)
-    for (const b of walls) resolveCircleVsBox(pos, radius, b)
+    // collide with walls
+    resolveVsWalls(pos, vel, radius, walls)
 
-    // choose aim each frame if mouse exists
-    if (input?.aim) {
-      tmp.set(input.aim.x, input.aim.y).sub(pos)
-      if (tmp.lengthSq() > 0.0001) aim.copy(tmp.normalize())
+    // update visuals
+    if (mesh.current) mesh.current.position.set(pos.x, pos.y, 0)
+
+    // aim + rotate nose
+    const aim = currentAim()
+    const rot = Math.atan2(aim.y, aim.x)
+    if (nose.current) {
+      nose.current.rotation.z = rot - Math.PI / 2
     }
 
-    tryShoot(dt)
-
-    // write to meshes
-    if (mesh.current) mesh.current.position.set(pos.x, pos.y, 0)
-    if (nose.current) {
-      nose.current.position.set(pos.x + aim.x * (radius + 0.3), pos.y + aim.y * (radius + 0.3), 0.15)
-      const rot = Math.atan2(aim.y, aim.x)
-      nose.current.rotation.z = rot - Math.PI / 2
+    // firing
+    cdRef.current -= dt
+    const wantFire = !!(input?.fire) || (Math.abs(input?.fireDir?.x ?? 0) + Math.abs(input?.fireDir?.y ?? 0) > 0)
+    const fireGap = (powerRapid > 0) ? baseFireGap * 0.5 : baseFireGap
+    if (wantFire && cdRef.current <= 0) {
+      addBullet({
+        id: crypto.randomUUID(),
+        owner: 'player',
+        x: pos.x + aim.x * muzzleOffset,
+        y: pos.y + aim.y * muzzleOffset,
+        vx: aim.x * bulletSpeed,
+        vy: aim.y * bulletSpeed,
+        r: 1.0,
+        life: 1.25,
+        color: '#ffffff',
+      })
+      cdRef.current = fireGap
     }
   })
 
-  // puck body + a sleek pointer "nose"
+  // --- render ---
   return (
     <group>
-      <mesh ref={mesh}>
+      {/* puck disk (rotate cylinder to face camera) */}
+      <mesh ref={mesh} rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[radius, radius, 0.8, 32]} />
-        <meshStandardMaterial color="#e5e5e5" metalness={0.35} roughness={0.25} emissive="#1a1a1a" />
+        <meshStandardMaterial
+          color="#e5e5e5"
+          metalness={0.35}
+          roughness={0.25}
+          emissive="#1a1a1a"
+        />
       </mesh>
 
-      <mesh ref={nose}>
+      {/* subtle ring */}
+      <mesh position={[pos.x, pos.y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[radius * 1.05, 0.12, 8, 48]} />
+        <meshStandardMaterial color="#9cdcff" emissive="#0a1a22" roughness={0.6} metalness={0.2} />
+      </mesh>
+
+      {/* pointer nose */}
+      <mesh ref={nose} position={[pos.x, pos.y, 0.9]}>
         <coneGeometry args={[0.7, 1.2, 16]} />
-        <meshStandardMaterial color="#9cdcff" metalness={0.2} roughness={0.4} emissive="#102030" />
+        <meshStandardMaterial color="#8fb6cf" roughness={0.4} metalness={0.1} />
       </mesh>
     </group>
   )
