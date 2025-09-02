@@ -1,8 +1,8 @@
 import React from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrthographicCamera } from "@react-three/drei";
-import Level from "./components/Level.jsx";
-import HUD from "./components/HUD.jsx";
+import Level from './assets/Level.jsx'
+import HUD from './assets/HUD.jsx'
 import { GameProvider } from "./systems/store.js";
 
 export default function App() {
