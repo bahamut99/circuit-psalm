@@ -130,7 +130,7 @@ export default function Player({ W, H, walls, input }) {
     if (nose.current) {
       nose.current.position.set(pos.x + aim.x * (radius + 0.3), pos.y + aim.y * (radius + 0.3), 0.15)
       const rot = Math.atan2(aim.y, aim.x)
-      nose.current.rotation.z = rot
+      nose.current.rotation.z = rot - Math.PI / 2
     }
   })
 
@@ -143,7 +143,7 @@ export default function Player({ W, H, walls, input }) {
       </mesh>
 
       <mesh ref={nose}>
-        <coneGeometry args={[1.1, 1.6, 16]} />
+        <coneGeometry args={[0.7, 1.2, 16]} />
         <meshStandardMaterial color="#9cdcff" metalness={0.2} roughness={0.4} emissive="#102030" />
       </mesh>
     </group>
