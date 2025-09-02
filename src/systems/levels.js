@@ -1,58 +1,48 @@
-// very simple starter layouts (easy first)
+/**
+ * Builds beveled rectangles for a few simple arenas.
+ * Units are world units; Level.jsx renders them with a center-origin.
+ */
+
 export const LEVELS = [
-  {
-    time: 60,
-    walls: [
-      // outer border
-      { x: 1, y: 1, w: 98, h: 2 },
-      { x: 1, y: 53, w: 98, h: 2 },
-      { x: 1, y: 1, w: 2, h: 54 },
-      { x: 97, y: 1, w: 2, h: 54 },
-    ],
-    spawns: [
-      { type: 'chaser', x: 0.85, y: 0.5, count: 4 },
-    ],
-    boss: true
-  },
-  {
-    time: 65,
-    walls: [
-      { x: 1, y: 1, w: 98, h: 2 }, { x: 1, y: 53, w: 98, h: 2 },
-      { x: 1, y: 1, w: 2, h: 54 }, { x: 97, y: 1, w: 2, h: 54 },
-      // inner bars with gaps
-      { x: 20, y: 18, w: 60, h: 2 },
-      { x: 20, y: 36, w: 60, h: 2 },
-      { x: 20, y: 18, w: 2, h: 20 },
-      { x: 78, y: 18, w: 2, h: 8 },
-      { x: 78, y: 30, w: 2, h: 8 },
-    ],
-    spawns: [
-      { type:'chaser', x:0.8, y:0.3, count:4 },
-      { type:'turret', x:0.8, y:0.7, count:1 },
-    ],
-    boss: true
-  },
-  {
-    time: 60,
-    walls: [
-      { x: 1, y: 1, w: 98, h: 2 }, { x: 1, y: 53, w: 98, h: 2 },
-      { x: 1, y: 1, w: 2, h: 54 }, { x: 97, y: 1, w: 2, h: 54 },
-      { x: 15, y: 12, w: 2, h: 32 }, { x: 83, y: 12, w: 2, h: 32 },
-      { x: 32, y: 26, w: 36, h: 2 },
-    ],
-    spawns: [
-      { type:'spinner', x:0.2, y:0.25, count:2 },
-      { type:'spinner', x:0.8, y:0.75, count:2 },
-      { type:'chaser', x:0.5, y:0.5, count:6 },
-    ],
-    boss: true
-  }
+  { time: 55, layout: 0 },
+  { time: 60, layout: 1 },
+  { time: 65, layout: 2 },
 ]
 
-// convert normalized walls {x:[0..1], y:[0..1]} into our world units (100x56) but we store as pixelish coords for 3D meshes.
-// Here Level.jsx expects absolute box coords in "world pixel" space (top-left origin-ish we adapt later).
-export function buildWalls(levelIndex, W, H){
-  const L = LEVELS[(levelIndex-1) % LEVELS.length]
-  // NOTE: LEVELS here already define walls in absolute units (for simplicity), so just return them
-  return L.walls
+export function buildWalls(levelIdx, W, H) {
+  const t = 4 // boundary thickness
+  const walls = []
+
+  // outer border
+  walls.push({ x: 0, y: 0, w: W, h: t })            // top
+  walls.push({ x: 0, y: H - t, w: W, h: t })        // bottom
+  walls.push({ x: 0, y: 0, w: t, h: H })            // left
+  walls.push({ x: W - t, y: 0, w: t, h: H })        // right
+
+  // a few inner shapes by layout
+  const L = LEVELS[(levelIdx - 1) % LEVELS.length]
+  if (L.layout === 0) {
+    // two horizontal bars
+    walls.push({ x: W * 0.22, y: H * 0.40, w: W * 0.56, h: t })
+    walls.push({ x: W * 0.22, y: H * 0.60, w: W * 0.56, h: t })
+  } else if (L.layout === 1) {
+    // U maze
+    walls.push({ x: W * 0.18, y: H * 0.25, w: t, h: H * 0.55 })
+    walls.push({ x: W * 0.18, y: H * 0.25, w: W * 0.64, h: t })
+    walls.push({ x: W * 0.82 - t, y: H * 0.25, w: t, h: H * 0.55 })
+    walls.push({ x: W * 0.40, y: H * 0.70 - t, w: W * 0.42, h: t })
+  } else {
+    // two pillars
+    walls.push({ x: W * 0.30, y: H * 0.30, w: t, h: H * 0.40 })
+    walls.push({ x: W * 0.70 - t, y: H * 0.30, w: t, h: H * 0.40 })
+    walls.push({ x: W * 0.40, y: H * 0.48, w: W * 0.20, h: t })
+  }
+
+  // NOTE: these x/y are in top-left origin (0..W,0..H) for Level.jsx's Box2 conversion
+  return walls.map((w) => ({
+    x: Math.floor(w.x),
+    y: Math.floor(w.y),
+    w: Math.floor(w.w),
+    h: Math.floor(w.h),
+  }))
 }
