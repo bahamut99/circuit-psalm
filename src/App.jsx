@@ -1,23 +1,45 @@
-import React from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrthographicCamera } from "@react-three/drei";
+import { Canvas, useFrame } from '@react-three/fiber'
+import { OrthographicCamera, Html } from '@react-three/drei'
+import { Perf } from '@react-three/drei'
 import Level from './assets/Level.jsx'
 import HUD from './assets/HUD.jsx'
-import { GameProvider } from "./systems/store.js";
+import { useGameStore } from './systems/store.js'
+import './App.css'
 
-export default function App() {
+function Scene() {
+  // mild animated grid background
+  const gridRef = React.useRef()
+  useFrame(({ clock }) => {
+    if (!gridRef.current) return
+    const t = clock.getElapsedTime()
+    gridRef.current.material.opacity = 0.07 + Math.sin(t * 0.6) * 0.02
+  })
   return (
-    <GameProvider>
-      <Canvas
-        gl={{ antialias: true, powerPreference: "high-performance" }}
-        style={{ width: "100vw", height: "100vh", background: "#000" }}
-      >
-        <ambientLight intensity={0.35} />
-        <pointLight position={[3, 3, 6]} intensity={10} distance={20} />
-        <OrthographicCamera makeDefault position={[0, 0, 10]} zoom={80} />
-        <Level />
+    <>
+      <OrthographicCamera makeDefault position={[0, 0, 100]} zoom={80} />
+      {/* subtle background grid plane */}
+      <mesh ref={gridRef} position={[0,0,-2]}>
+        <planeGeometry args={[100, 56]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.08} />
+      </mesh>
+      <Level />
+    </>
+  )
+}
+
+import React from 'react'
+export default function App() {
+  const state = useGameStore(s => s.state)
+  return (
+    <>
+      <Canvas dpr={[1, 2]}>
+        <color attach="background" args={['#000']} />
+        <Scene />
+        {/* Perf is optional; remove if you want */}
+        {/* <Perf position="bottom-left" /> */}
       </Canvas>
       <HUD />
-    </GameProvider>
-  );
+    </>
+  )
 }
+

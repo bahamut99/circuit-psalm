@@ -1,48 +1,58 @@
-import { rand } from "./collision";
-
-export function makeLevel(levelIndex) {
-  const time = 60 + Math.min(20, levelIndex * 4);
-
-  // Outer arena, add internal bars after L2
-  const walls = [
-    { x: 0.0, y: 0.38, w: 0.90, h: 0.02 },
-    { x: 0.0, y: -0.38, w: 0.90, h: 0.02 },
-    { x: -0.45, y: 0.0, w: 0.02, h: 0.76 },
-    { x: 0.45, y: 0.0, w: 0.02, h: 0.76 },
-  ];
-  if (levelIndex >= 2) {
-    walls.push({ x: -0.12, y: 0.12, w: 0.22, h: 0.02 });
-    walls.push({ x: 0.18, y: -0.10, w: 0.22, h: 0.02 });
+// very simple starter layouts (easy first)
+export const LEVELS = [
+  {
+    time: 60,
+    walls: [
+      // outer border
+      { x: 1, y: 1, w: 98, h: 2 },
+      { x: 1, y: 53, w: 98, h: 2 },
+      { x: 1, y: 1, w: 2, h: 54 },
+      { x: 97, y: 1, w: 2, h: 54 },
+    ],
+    spawns: [
+      { type: 'chaser', x: 0.85, y: 0.5, count: 4 },
+    ],
+    boss: true
+  },
+  {
+    time: 65,
+    walls: [
+      { x: 1, y: 1, w: 98, h: 2 }, { x: 1, y: 53, w: 98, h: 2 },
+      { x: 1, y: 1, w: 2, h: 54 }, { x: 97, y: 1, w: 2, h: 54 },
+      // inner bars with gaps
+      { x: 20, y: 18, w: 60, h: 2 },
+      { x: 20, y: 36, w: 60, h: 2 },
+      { x: 20, y: 18, w: 2, h: 20 },
+      { x: 78, y: 18, w: 2, h: 8 },
+      { x: 78, y: 30, w: 2, h: 8 },
+    ],
+    spawns: [
+      { type:'chaser', x:0.8, y:0.3, count:4 },
+      { type:'turret', x:0.8, y:0.7, count:1 },
+    ],
+    boss: true
+  },
+  {
+    time: 60,
+    walls: [
+      { x: 1, y: 1, w: 98, h: 2 }, { x: 1, y: 53, w: 98, h: 2 },
+      { x: 1, y: 1, w: 2, h: 54 }, { x: 97, y: 1, w: 2, h: 54 },
+      { x: 15, y: 12, w: 2, h: 32 }, { x: 83, y: 12, w: 2, h: 32 },
+      { x: 32, y: 26, w: 36, h: 2 },
+    ],
+    spawns: [
+      { type:'spinner', x:0.2, y:0.25, count:2 },
+      { type:'spinner', x:0.8, y:0.75, count:2 },
+      { type:'chaser', x:0.5, y:0.5, count:6 },
+    ],
+    boss: true
   }
+]
 
-  // Spawns (normalized space: -0.5..0.5 screen units)
-  const spawns = [];
-  const n = Math.min(6 + levelIndex * 2, 22);
-
-  if (levelIndex < 2) {
-    for (let k = 0; k < n; k++)
-      spawns.push({ type: "chaser", x: 0.35, y: rand(-0.25, 0.25), count: 1 });
-  } else if (levelIndex < 4) {
-    for (let k = 0; k < n; k++)
-      spawns.push({
-        type: k % 4 === 0 ? "spinner" : "chaser",
-        x: 0.30,
-        y: -0.30 + (k % 6) * 0.12,
-        count: 1,
-      });
-  } else {
-    for (let k = 0; k < n; k++)
-      spawns.push({
-        type: k % 5 === 0 ? "turret" : k % 2 ? "spinner" : "chaser",
-        x: k % 2 ? 0.32 : 0.28,
-        y: -0.32 + (k % 8) * 0.08,
-        count: 1,
-      });
-  }
-
-  return { time, walls, spawns };
-}
-
-export function pickBoss(levelIndex) {
-  return `boss${(levelIndex % 3) + 1}`; // boss1 | boss2 | boss3
+// convert normalized walls {x:[0..1], y:[0..1]} into our world units (100x56) but we store as pixelish coords for 3D meshes.
+// Here Level.jsx expects absolute box coords in "world pixel" space (top-left origin-ish we adapt later).
+export function buildWalls(levelIndex, W, H){
+  const L = LEVELS[(levelIndex-1) % LEVELS.length]
+  // NOTE: LEVELS here already define walls in absolute units (for simplicity), so just return them
+  return L.walls
 }

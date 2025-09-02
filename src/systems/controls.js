@@ -1,36 +1,47 @@
-import { useEffect, useRef } from "react";
+import * as THREE from 'three'
+import React from 'react'
 
-// Live keyboard/mouse snapshot you can read inside useFrame
-export function useInputSnapshot() {
-  const keys = useRef(new Set());
-  const mouse = useRef({ x: 0, y: 0, down: false });
+export function useInputBindings(){
+  const move = React.useRef(new THREE.Vector2())
+  const shoot = React.useRef(new THREE.Vector2())
+  const mouseAim = React.useRef(new THREE.Vector2())
+  const res = { move: move.current, shoot: shoot.current, mouseAim: mouseAim.current }
 
-  useEffect(() => {
-    const kd = (e) => {
-      if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
-      keys.current.add(e.code);
-    };
-    const ku = (e) => keys.current.delete(e.code);
-    const mm = (e) => {
-      mouse.current.x = e.clientX;
-      mouse.current.y = e.clientY;
-    };
-    const md = (e) => { if (e.button === 0) mouse.current.down = true; };
-    const mu = (e) => { if (e.button === 0) mouse.current.down = false; };
+  React.useEffect(() => {
+    const keys = new Set()
+    const onKeyDown = (e)=>{ keys.add(e.code) }
+    const onKeyUp   = (e)=>{ keys.delete(e.code) }
+    const onMouseMove = (e)=>{
+      const rect = e.target?.getBoundingClientRect?.()
+      if (!rect) return
+      // map screen -> world (orthographic with zoom 80 and size ~100x56)
+      const x = ((e.clientX - rect.left)/rect.width) * 2 - 1
+      const y = -(((e.clientY - rect.top)/rect.height) * 2 - 1)
+      mouseAim.current.set(x, y) // not exact world units but direction works fine
+    }
+    const onMouseDown = ()=>{ /* using Space to shoot with mouse aim */ }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('mousemove', onMouseMove)
 
-    window.addEventListener("keydown", kd);
-    window.addEventListener("keyup", ku);
-    window.addEventListener("mousemove", mm);
-    window.addEventListener("mousedown", md);
-    window.addEventListener("mouseup", mu);
-    return () => {
-      window.removeEventListener("keydown", kd);
-      window.removeEventListener("keyup", ku);
-      window.removeEventListener("mousemove", mm);
-      window.removeEventListener("mousedown", md);
-      window.removeEventListener("mouseup", mu);
-    };
-  }, []);
+    const loop = ()=>{
+      // WASD move
+      const x = (keys.has('KeyD')||keys.has('ArrowRight')?1:0) - (keys.has('KeyA')||keys.has('ArrowLeft')?1:0)
+      const y = (keys.has('KeyW')?1:0) - (keys.has('KeyS')?1:0)
+      move.current.set(x, y)
 
-  return { keys, mouse };
+      // Arrow keys shoot (or Space uses mouse)
+      const sx = (keys.has('ArrowRight')?1:0) - (keys.has('ArrowLeft')?1:0)
+      const sy = (keys.has('ArrowUp')?1:0) - (keys.has('ArrowDown')?1:0)
+      if (sx||sy) shoot.current.set(sx, sy)
+      else if (keys.has('Space')) shoot.current.copy(mouseAim.current)
+      else shoot.current.set(0,0)
+
+      raf = requestAnimationFrame(loop)
+    }
+    let raf = requestAnimationFrame(loop)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('mousemove', onMouseMove); }
+  }, [])
+
+  return res
 }

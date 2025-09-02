@@ -1,73 +1,68 @@
-import React from "react";
-import { useGame } from "../systems/store.js";
-
-const Pill = ({ children }) => (
-  <div style={{
-    background: "rgba(255,255,255,.06)",
-    border: "1px solid rgba(255,255,255,.15)",
-    borderRadius: 999, padding: "6px 10px", fontSize: 14, pointerEvents: "none"
-  }}>{children}</div>
-);
-
-const Center = ({ children }) => (
-  <div style={{ textTransform: "uppercase", letterSpacing: 1 }}>
-    <h1 style={{ margin: "0 0 10px", fontSize: "clamp(22px,3vw,36px)" }}>{children[0].props.children}</h1>
-    {children.slice(1)}
-  </div>
-);
+import React from 'react'
+import { useGameStore } from '../systems/store.js'
 
 export default function HUD() {
-  const { ui } = useGame();
+  const { state, level, lives, timer, enemies, powerRapid, powerShield } = useGameStore(s => ({
+    state: s.state,
+    level: s.level,
+    lives: s.lives,
+    timer: s.timer,
+    enemies: s.enemies.length,
+    powerRapid: s.powerRapid,
+    powerShield: s.powerShield
+  }))
+  const setState = useGameStore(s => s.setState)
+  const reset = useGameStore(s => s.reset)
+
   return (
-    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", color: "#fff",
-      display: "grid", gridTemplateRows: "auto 1fr auto", fontFamily: "ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px" }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Pill>LEVEL: {ui.level}</Pill>
-          <Pill>TIME: {ui.time.toFixed(1)}</Pill>
-          <Pill>LIVES: {ui.lives}</Pill>
-          <Pill>{ui.boss ? "BOSS" : `ENEMIES: ${ui.enemies}`}</Pill>
-          <Pill>{ui.powerShield>0 ? `🛡 ${ui.powerShield.toFixed(1)}s` : "—"} {ui.powerRapid>0 ? ` ⚡ ${ui.powerRapid.toFixed(1)}s` : ""}</Pill>
+    <div className="hud">
+      <div className="top">
+        <div className="row">
+          <div className="pill">LEVEL: {level}</div>
+          <div className="pill">TIME: {Math.max(0, timer).toFixed(1)}</div>
+          <div className="pill">LIVES: {lives}</div>
+          <div className="pill">ENEMIES: {enemies}</div>
+          <div className="pill">
+            {powerShield>0 ? `🛡 ${powerShield.toFixed(1)}s ` : ''}
+            {powerRapid>0 ? `⚡ ${powerRapid.toFixed(1)}s` : (powerShield<=0 ? '—' : '')}
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Pill>Move: WASD</Pill>
-          <Pill>Shoot: Arrows / Mouse+Space</Pill>
-          <Pill>P pause · R restart</Pill>
+        <div className="row">
+          <div className="pill">WASD move</div>
+          <div className="pill">Arrows or Mouse+Space shoot</div>
+          <div className="pill">P pause · R restart</div>
         </div>
       </div>
 
-      <div style={{ placeSelf: "center", textAlign: "center", maxWidth: "min(90vw, 820px)" }}>
-        {ui.state === "intro" && (
-          <Center>
-            <h1>CIRCUIT PSALM</h1>
-            <p>NieR-style cyberspace hack shooter. Clear waves → fight a boss.</p>
-            <p>Power-ups: ⚡ Rapid, 🛡 Shield, ❤️ Life (5% drop, blink at 3s, despawn at 5s).</p>
-            <p>Press <b>Enter</b> to jack in.</p>
-          </Center>
+      <div className="center">
+        {state === 'intro' && (
+          <>
+            <h1>Circuit Psalm</h1>
+            <p>Clear hostiles before time runs out. Boss at the end of each level.</p>
+            <p>Press <b>Enter</b> to start.</p>
+          </>
         )}
-        {ui.state === "interlude" && (
-          <Center>
-            <h1>ACCESS GRANTED</h1>
-            <p>Level {ui.level - 1} cleared. Press <b>Enter</b> to continue.</p>
-          </Center>
-        )}
-        {ui.state === "paused" && (
-          <Center>
+        {state === 'paused' && (
+          <>
             <h1>PAUSED</h1>
             <p>Press <b>P</b> to resume.</p>
-          </Center>
+          </>
         )}
-        {ui.state === "gameover" && (
-          <Center>
+        {state === 'interlude' && (
+          <>
+            <h1>ACCESS GRANTED</h1>
+            <p>Level cleared. Press <b>Enter</b> to continue.</p>
+          </>
+        )}
+        {state === 'gameover' && (
+          <>
             <h1>TRACE REJECTED</h1>
-            <p>Out of lives. Press <b>Enter</b> to retry from Level 1.</p>
-          </Center>
+            <p>Out of lives. Press <b>Enter</b> to retry.</p>
+          </>
         )}
       </div>
 
-      <div style={{ alignSelf: "end", padding: "8px 14px", opacity: 0.65, fontSize: 12 }}>
-        Circuit Psalm — React Three Fiber
-      </div>
+      <div className="foot">React Three Fiber • lightweight pooling • © you</div>
     </div>
-  );
+  )
 }

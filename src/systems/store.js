@@ -1,38 +1,38 @@
-// src/systems/store.js
-import { create } from 'zustand';
+import { create } from 'zustand'
+
+let nextId = 1
+const uid = () => nextId++
 
 const initial = {
-  state: 'intro',   // 'intro' | 'playing' | 'paused' | 'interlude' | 'gameover'
+  state: 'intro',
   level: 1,
   lives: 3,
-  score: 0,
   timer: 60,
   powerRapid: 0,
   powerShield: 0,
-};
+  enemies: [],
+  bullets: [],
+  powerups: [],
+}
 
 export const useGameStore = create((set, get) => ({
   ...initial,
 
-  // setters
   setState: (state) => set({ state }),
   setLevel: (level) => set({ level }),
-  setTimer: (timer) => set({ timer }),
-  setLives: (lives) => set({ lives }),
+  setTimer: (timerOrFn) => set(s => ({ timer: typeof timerOrFn==='function' ? timerOrFn(s.timer) : timerOrFn })),
+  setLives: (livesOrFn) => set(s => ({ lives: typeof livesOrFn==='function' ? livesOrFn(s.lives) : livesOrFn })),
+  addLife: () => set(s => ({ lives: s.lives + 1 })),
 
-  // counters
-  addScore: (v) => set({ score: get().score + v }),
-  addLife: () => set({ lives: get().lives + 1 }),
-  loseLife: () => set({ lives: Math.max(0, get().lives - 1) }),
+  setPowerRapid: (v) => set({ powerRapid: v }),
+  setPowerShield: (v) => set({ powerShield: v }),
 
-  // power ups
-  setPowerRapid: (t) => set({ powerRapid: t }),
-  setPowerShield: (t) => set({ powerShield: t }),
+  addEnemy: (e) => set(s => ({ enemies: [...s.enemies, { id: uid(), ...e }] })),
+  addBullet: (b) => set(s => ({ bullets: [...s.bullets, { id: uid(), ...b }] })),
+  addPowerUp: (p) => set(s => ({ powerups: [...s.powerups, { id: uid(), ...p }] })),
 
-  // reset everything
+  setArrays: (obj) => set(obj),
+  clearArrays: () => set({ enemies: [], bullets: [], powerups: [] }),
+
   reset: () => set({ ...initial }),
-}));
-
-// Back-compat alias in case other files import `useStore`
-export const useStore = useGameStore;
-export default useGameStore;
+}))
